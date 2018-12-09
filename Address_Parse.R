@@ -13,10 +13,20 @@ x <- Parse_Address(LA_Address)
 LA_Address[1,4]
 
 
-i <- 1
+
 Addy <-function (z) { 
-   x <- paste0(LA_Address[i,4]," ",LA_Address[i,5]," ",LA_Address[i,6]," ",LA_Address[i,7]," ",LA_Address[i,8]," ",LA_Address[i,9], " ") 
-   x <- str_replace_all(x," NA ", " ")
-   return(x)
+  DF <- setNames(data.frame(matrix(ncol = 1, nrow = 0)), c("address"))
+   i <- i
+   
+    while(i <= nrow(z)){
+   x <- paste0(z[i,4]," ",z[i,5]," ",z[i,6]," ",z[i,7]," ",z[i,8]," ",z[i,9], " ") 
+   x <- str_replace_all(x," NA ", " "); 
+   DF[i,1] <-x; i <- i+1
+   
+    }  
+return(DF[ ,1 ])
 }
 
+TEST <- Addy(LA_Address[1:100, ])
+
+TEST
