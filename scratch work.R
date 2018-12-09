@@ -118,14 +118,16 @@ Parse_Zillow <- function(y){
  }
 
 
+reply = getForm("http://www.zillow.com/webservice/GetDeepSearchResults.htm", 'zws-id' = "X1-ZWz1gsgmv6z4sr_7kib9",
+                address = "14707 W Sunny Dr",
+                citystatezip = "Los Angeles, CA")
+doc <- xmlTreeParse(reply,asText = TRUE, useInternalNodes = TRUE)
 
+doc
 
+xmlValue(doc[["region="]])
 
-
-
-
-
-
+xmlParseDoc(doc)
 
 
 
