@@ -54,7 +54,7 @@ Parse_Zillow <- function(y){
    else( return("NULL"))
 }
 
-YY2 <- apply(LA_SAMPLE_FULL_SMALL ,MARGIN = 1, Parse_Zillow_2)
+YY <- apply(LA_SAMPLE_FULL_SMALL,MARGIN = 1 , Parse_Zillow_2)
 
 LA_SAMPLE_FULL_SMALL <- as.data.frame(LA_SAMPLE_FULL[1:5, 1 ]) 
 

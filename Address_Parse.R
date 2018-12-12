@@ -14,10 +14,8 @@ return(as.data.frame(DF))
 
 LA_SAMPLE <- LA_Address[sample(nrow(LA_Address),5000), ]
 
+LA_SAMPLE_VECTOR <- Parse_Address(LA_SAMPLE)
 
-LA_SAMPLE_FULL <- Parse_Address(LA_SAMPLE)
 
 
- TEST <- Parse_Address(LA_Address)
- 
  
