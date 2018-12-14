@@ -169,6 +169,15 @@ cbind(S_BAG_PRED, MODEL_TEST$zestimate )
 
 ```
 
+### Set up for use of Parallel Computing
+
+```{r}
+
+library(parallel)
+
+parallel::detectCores()
+
+```
 
 
 
