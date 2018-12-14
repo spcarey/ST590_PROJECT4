@@ -17,7 +17,7 @@ Parse_Zillow_2 <- function(x){
           X[1,1] <- xpathCheck(y, "//street")
           X[1,2] <- xpathCheck(y,"//zipcode") 
           X[1,3] <-   xpathCheck(y,"//city")
-          X[1,4] <-  xpathCheck(y,"//UseCode")
+          X[1,4] <-  xpathCheck(y,"//useCode")
           X[1,5] <- xpathCheck(y,"//taxAssessmentYear")
           X[1,6] <- xpathCheck(y,"//taxAssessment")
           X[1,7] <- xpathCheck(y,"//yearBuilt")
@@ -54,10 +54,18 @@ XX <- lapply(as.list(LA_SMALL), Parse_Zillow_2)
 
 TEST_FRAME <- apply(as.data.frame(LA_SMALL) ,MARGIN = 1,Parse_Zillow_2 )
 
-TEST_FRAME <- map_df(LA_SMALL, Parse_Zillow_2)
+TEST_FRAME <- map_df(LA_SAMPLE_VECTOR[1:999, ],  Parse_Zillow_2)
+TEST_FRAME_2 <-  map_df(LA_SAMPLE_VECTOR[1000:1999, ],  Parse_Zillow_2)
+Test_FRAME_3 <-  map_df(LA_SAMPLE_VECTOR[2000:2999,],  Parse_Zillow_2)
+
+TEST_FRAME_4 <- map_df(LA_SAMPLE_VECTOR[3000:3999, ],  Parse_Zillow_2)
+TEST_FRAME_5 <-  map_df(LA_SAMPLE_VECTOR[4000:4950, ],  Parse_Zillow_2)
 
 
-TEST_DF <- Parse_Zillow_2(LA_SAMPLE_FULL_SMALL[3,])
-doc
 
-xmlValue(ZILLOW_XML[["//taxAssessment"]])
+TEST_FRAME <- TEST_FRAME %>% filter(!is.na(zestimate))
+
+TEST_FRAME[504, ]
+
+ZILLOW_XML
+

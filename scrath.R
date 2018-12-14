@@ -1,7 +1,7 @@
 
 
 reply = getForm("http://www.zillow.com/webservice/GetDeepSearchResults.htm", 'zws-id' = "X1-ZWz1gsgmv6z4sr_7kib9",
-                address = "123 dumb st",
+                address = street,
                 citystatezip = "Los Angeles, CA")
 doc <- xmlTreeParse(reply,asText = TRUE, useInternalNodes = TRUE)
 code <-xmlValue(doc[["//code"]])

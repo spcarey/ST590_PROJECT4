@@ -4,7 +4,7 @@ library(xml2)
 library(XML)
 library(purrr)
 
-ZILL1 <- GetDeepSearchResults(address = '14706 W SUNNY DR', citystatezip = "Los Angeles, CA", zws_id = "X1-ZWz1gsahvqczkb_376md")
+ZILL1 <- GetDeepSearchResults(address = '14706 E SUNNY DR', citystatezip = "Los Angeles, CA", zws_id = "X1-ZWz1gsahvqczkb_376md")
 ZILL1 <- xmlToList(ZILL1$response[["results"]])
 
 ZILL1[["result"]]
@@ -120,7 +120,7 @@ Parse_Zillow <- function(y){
 
 
 ZillowRep = getForm("http://www.zillow.com/webservice/GetDeepSearchResults.htm", 'zws-id' = "X1-ZWz1gsgmv6z4sr_7kib9",
-                address = LA_SMALL[1],
+                address = LA_SMALL[5],
                 citystatezip = "Los Angeles, CA")
 ZILLOW_XML <- xmlTreeParse(ZillowRep,asText = TRUE, useInternalNodes = TRUE)
 Parse_DOC(ZILLOW_XML)

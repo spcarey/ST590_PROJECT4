@@ -1,0 +1,176 @@
+---
+title: "Project 4"
+author: "Sean Carey"
+date: "12/13/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(include = FALSE)
+library(ZillowR)
+library(tidyverse)
+library(xml2)
+library(XML)
+library(purrr)
+library(randomForest)
+set.seed(5415)
+```
+##PART 1: Prepare the Data
+
+
+### Read in LA Address Data
+
+The address data is stored as a csv and will be read into R as a data frame
+
+```{r read address data, eval=FALSE, include=FALSE}
+La_Address <- read_csv("rows.csv")
+```
+
+### Sample Addresses
+
+Take a random sample of 5000 addresses
+
+```{r pressure, echo=FALSE, eval=FALSE}
+LA_SAMPLE <- LA_Address[sample(nrow(LA_Address),5000), ]
+```
+
+### Create Function to combine address fields  
+
+All of the needed address fields are stored in separate columns of the La_Address. This function will take all 5000 of the sampled LA Addresses and combine them into a single character vector.
+```{r Parse Address Function, eval=FALSE}
+Parse_Address <-function (z) { 
+  DF <- setNames(data.frame(matrix(ncol = 1, nrow = 0)), c("address"))
+   i <- 1
+   
+    while(i <= nrow(z)){
+   x <- paste0(z[i,4]," ",z[i,5]," ",z[i,6]," ",z[i,7]," ",z[i,8]," ",z[i,9], " ") 
+   x <- str_replace_all(x," NA ", " "); 
+   DF[i,1] <-x; i <- i+1
+   
+    }  
+return(as.data.frame(DF))
+}
+
+#run the sampeld LA Addresses thru the function
+## The vector is saved as a data frame for ease of use
+LA_SAMPLE_VECTOR <- Parse_Address(LA_SAMPLE)
+
+
+
+
+
+```
+
+### ZILLOW API Function 
+
+The Zillow API allows us to us to query addresses on the Zillow website and get a list containing an XML of the ZILLOW data for the address.  
+
+This function will read an address, queary ZILLOW using the ZILLOW API, extract the desired information from the returned XML and save it as a row in a data frame. 
+
+```{r ParseZillow Function, eval=FALSE}
+
+Parse_Zillow <- function(x){
+   #create empty data frame
+   X <- setNames(as.data.frame(matrix(ncol = 12, nrow = 1)), c("street","zip", "city","Use_Code", "Tax_Year", "Tax_Value","year_built", "lot_size", "finished_sq_feet", "bathrooms","bedrooms", "zestimate"))
+   #query the API save return as "reply"
+   reply = RCurl::getForm("http://www.zillow.com/webservice/GetDeepSearchResults.htm", 'zws-id' = "X1-ZWz1gsahvqczkb_376md",
+                   address = x,
+                   citystatezip = "Los Angeles, CA")
+   #extract the XML portion of "reply"
+   y <- xmlTreeParse(reply,asText = TRUE, useInternalNodes = TRUE)
+   #save returned http code as "code"
+   code <-xmlValue(y[["//code"]])
+   #if 508 is returned then the zillow does not have that address. Results in a row of NA's 
+   if(code == "508")  X[1,1:12] <- "NA"
+      
+      #use xpathCheck to extract the desired information
+      #saveit it as a variable in a data frame
+      
+          X[1,1] <- xpathCheck(y, "//street")
+          X[1,2] <- xpathCheck(y,"//zipcode") 
+          X[1,3] <-   xpathCheck(y,"//city")
+          X[1,4] <-  xpathCheck(y,"//useCode")
+          X[1,5] <- xpathCheck(y,"//taxAssessmentYear")
+          X[1,6] <- xpathCheck(y,"//taxAssessment")
+          X[1,7] <- xpathCheck(y,"//yearBuilt")
+          X[1,8] <- xpathCheck(y,"//lotSizeSqFt")
+          X[1,9] <- xpathCheck(y,"//finishedSqFt")
+          X[1,10] <- xpathCheck(y,"//bathrooms")
+          X[1,11] <- xpathCheck(y,"//bedrooms")
+          X[1,12] <- xpathCheck(y,"//amount")
+          
+   
+  return(X)
+}
+
+
+#Use map_df from the PURR packackage to run each address in the LA_SAMPLE data frame thru the Parse_Zillow function
+#map_df was chosen because it returns a data frame
+
+ZILLOW_FULL <- map_df(LA_SAMPLE_VECTOR[1:4000, ], Parse_Zillow)
+
+write_csv(ZILLOW_FULL, "ZILLOW_FULL_DATA.csv")
+```
+
+
+```{r}
+
+# drop rows with missng mavlues
+MODEL_FULL <- ZILLOW_FULL %>% as.tibble() %>% select(Use_Code:zestimate)
+
+MODEL_FULL$Use_Code <- forcats::as_factor(MODEL_FULL$Use_Code)
+MODEL_FULL$Tax_Year <- as.numeric(MODEL_FULL$Tax_Year)
+MODEL_FULL$Tax_Value <- as.numeric(MODEL_FULL$Tax_Value)
+MODEL_FULL$year_built <- as.numeric(MODEL_FULL$year_built)
+MODEL_FULL$lot_size <- as.numeric(MODEL_FULL$lot_size)
+MODEL_FULL$finished_sq_feet <- as.numeric(MODEL_FULL$finished_sq_feet)
+MODEL_FULL$bathrooms <- as.numeric(MODEL_FULL$bathrooms)
+MODEL_FULL$bedrooms <- as.numeric(MODEL_FULL$bedrooms)
+MODEL_FULL$zestimate <- as.numeric(MODEL_FULL$zestimate)
+
+MODEL_FULL <- drop_na(MODEL_FULL)
+
+write_csv(MODEL_FULL, "ZILLOW_DATA.csv")
+
+```
+
+##Split Zillow data into Training and Test datasets
+
+
+```{r Split Model Dataset}
+
+TRAIN <- sample(1:nrow(MODEL_FULL), size = nrow(MODEL_FULL)*0.8)
+TEST <- dplyr::setdiff(1:nrow(MODEL_FULL), TRAIN)
+
+#create training and test data sets
+MODEL_TRAIN <-  MODEL_FULL[TRAIN, ]
+MODEL_TEST <- MODEL_FULL[TEST, ]
+
+
+```
+
+##Part II: The Analysis  
+
+  We will fit the Zillow data to a bagged regression tree using sequential fitting/predicting and Parallel fitting/predicting
+
+### Sequentially Fit Bagged Regression Tree 
+
+
+```{r Sequential Tree}
+S_BAG_FIT <- randomForest::randomForest(zestimate ~ ., data = MODEL_TRAIN, mtry = ncol(MODEL_TRAIN) - 1, 
+											 ntree = 2000, importance = TRUE)
+S_BAG_PRED <- predict(S_BAG_FIT, newdata = dplyr::select(MODEL_TEST, -zestimate))
+
+S_BAG_RMSE <- sqrt(mean((S_BAG_PRED - MODEL_TEST$zestimate )^2))
+
+S_BAG_RMSE
+
+cbind(S_BAG_PRED, MODEL_TEST$zestimate )
+
+```
+
+
+
+
+
+
