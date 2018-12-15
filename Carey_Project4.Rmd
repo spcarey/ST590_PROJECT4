@@ -6,13 +6,17 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(include = FALSE)
+knitr::opts_chunk$set(include = TRUE)
 library(ZillowR)
 library(tidyverse)
 library(xml2)
 library(XML)
 library(purrr)
+library(knitr)
 library(randomForest)
+library(microbenchmark)
+#load(file="PROJ4.RData")
+
 set.seed(5415)
 ```
 ##PART 1: Prepare the Data
@@ -22,7 +26,7 @@ set.seed(5415)
 
 The address data is stored as a csv and will be read into R as a data frame
 
-```{r read address data, eval=FALSE, include=FALSE}
+```{r read address data, eval=FALSE, echo=TRUE}
 La_Address <- read_csv("rows.csv")
 ```
 
@@ -30,14 +34,14 @@ La_Address <- read_csv("rows.csv")
 
 Take a random sample of 5000 addresses
 
-```{r pressure, echo=FALSE, eval=FALSE}
+```{r pressure, echo=TRUE, eval=FALSE}
 LA_SAMPLE <- LA_Address[sample(nrow(LA_Address),5000), ]
 ```
 
 ### Create Function to combine address fields  
 
 All of the needed address fields are stored in separate columns of the La_Address. This function will take all 5000 of the sampled LA Addresses and combine them into a single character vector.
-```{r Parse Address Function, eval=FALSE}
+```{r Parse Address Function, eval=FALSE, echo=TRUE}
 Parse_Address <-function (z) { 
   DF <- setNames(data.frame(matrix(ncol = 1, nrow = 0)), c("address"))
    i <- 1
@@ -67,7 +71,7 @@ The Zillow API allows us to us to query addresses on the Zillow website and get 
 
 This function will read an address, queary ZILLOW using the ZILLOW API, extract the desired information from the returned XML and save it as a row in a data frame. 
 
-```{r ParseZillow Function, eval=FALSE}
+```{r ParseZillow Function, eval=FALSE, echo=TRUE}
 
 Parse_Zillow <- function(x){
    #create empty data frame
@@ -103,6 +107,15 @@ Parse_Zillow <- function(x){
   return(X)
 }
 
+```
+
+### Use API function to get data  
+
+We use map_df from the PURRR package to run each address thru the Parse_Zillow function. I chose map_df becasue the output is a dataframe. After the data is saved to a data frame it is saved to a CSV.
+
+```{r use function, eval=FALSE, echo=TRUE}
+
+
 
 #Use map_df from the PURR packackage to run each address in the LA_SAMPLE data frame thru the Parse_Zillow function
 #map_df was chosen because it returns a data frame
@@ -112,8 +125,10 @@ ZILLOW_FULL <- map_df(LA_SAMPLE_VECTOR[1:4000, ], Parse_Zillow)
 write_csv(ZILLOW_FULL, "ZILLOW_FULL_DATA.csv")
 ```
 
+###Prepare Data  
 
-```{r}
+ We remove missing values and make sure all of the variables are of the correct type. Then write it to a CSV.
+```{r ,eval=FALSE, echo=TRUE}
 
 # drop rows with missng mavlues
 MODEL_FULL <- ZILLOW_FULL %>% as.tibble() %>% select(Use_Code:zestimate)
@@ -137,7 +152,7 @@ write_csv(MODEL_FULL, "ZILLOW_DATA.csv")
 ##Split Zillow data into Training and Test datasets
 
 
-```{r Split Model Dataset}
+```{r Split Model Dataset, eval=FALSE, echo=TRUE}
 
 TRAIN <- sample(1:nrow(MODEL_FULL), size = nrow(MODEL_FULL)*0.8)
 TEST <- dplyr::setdiff(1:nrow(MODEL_FULL), TRAIN)
@@ -156,29 +171,103 @@ MODEL_TEST <- MODEL_FULL[TEST, ]
 ### Sequentially Fit Bagged Regression Tree 
 
 
-```{r Sequential Tree}
+```{r Sequential Tree, eval=FALSE, echo=TRUE}
+
+
+#Sequentially fit Bagged Random Forest
 S_BAG_FIT <- randomForest::randomForest(zestimate ~ ., data = MODEL_TRAIN, mtry = ncol(MODEL_TRAIN) - 1, 
-											 ntree = 2000, importance = TRUE)
+											 ntree = 3000, importance = TRUE)
+
+#Predict using Test set
 S_BAG_PRED <- predict(S_BAG_FIT, newdata = dplyr::select(MODEL_TEST, -zestimate))
 
+#compute RMSE
 S_BAG_RMSE <- sqrt(mean((S_BAG_PRED - MODEL_TEST$zestimate )^2))
 
-S_BAG_RMSE
 
-cbind(S_BAG_PRED, MODEL_TEST$zestimate )
 
-```
-
-### Set up for use of Parallel Computing
-
-```{r}
-
-library(parallel)
-
-parallel::detectCores()
 
 ```
 
+### Parallel Fit Bagged Random Forest
+
+```{r ,eval=FALSE, echo=TRUE }
+
+#detect number of cores on machine
+cores <- detectCores()
+#create cluster
+cluster <- makeCluster(cores - 1)
+
+#create parallel function that will be run in parLapply
+parallel.function <- function(i){ randomForest::randomForest(zestimate ~ , data = MODEL_TRAIN, mtry = ncol(MODEL_TRAIN) - 1, 
+											 ntree = i, importance = TRUE)}
+#Export the dataset to the cluster.
+clusterExport(cluster,c('MODEL_TRAIN'))
+
+#run the parallel function 1000 times on each  of the 3 available cores.
+results <- parLapply(cluster,X=c(1000,1000,1000),fun = parallel.function)
+
+stopCluster(cluster)
+
+#Predict using each of the three saved fits
+PRED1 <- predict(results[[1]], newdata = dplyr::select(MODEL_TEST, -zestimate))
+PRED2 <- predict(results[[2]], newdata = dplyr::select(MODEL_TEST, -zestimate))
+PRED3 <- predict(results[[3]], newdata = dplyr::select(MODEL_TEST, -zestimate))
+
+#Average the predictions of the three returned fits. 
+PREDC <- (PRED1+PRED2+PRED3)/3
+
+#compute the RMSE of the Parallelized version of the model
+P_BAG_RMSE <- sqrt(mean((PREDC - MODEL_TEST$zestimate )^2))
+
+
+```
+
+
+### Use Microbenchmark to get find the difference in runtime between each version of the model 
+```{r,eval=FALSE, echo=TRUE}
+#benchmark sequentially fit model
+S_TIME <- microbenchmark({
+S_BAG_FIT <- randomForest::randomForest(zestimate ~ ., data = MODEL_TRAIN, mtry = ncol(MODEL_TRAIN) - 1, 
+											 ntree = 3000, importance = TRUE)
+}, times = 10, unit = "s")
+
+
+#benchmark Parallel fit model
+P_TIME <- microbenchmark({ cluster <- makeCluster(cores - 1)
+
+parallel.function <- function(i){ randomForest::randomForest(zestimate ~ ., data = MODEL_TRAIN, mtry = ncol(MODEL_TRAIN) - 1, 
+											 ntree = i, importance = TRUE)}
+
+clusterExport(cluster,c('MODEL_TRAIN'))
+
+results <- parLapply(cluster,X=c(1000,1000,1000),fun = parallel.function)
+
+stopCluster(cluster)  
+}, times = 10, unit = "s")
+
+Mean_S_TIME <- mean(S_TIME$time)/1000000000
+Mean_P_TIME <- mean(P_TIME$time)/1000000000
+
+```
+
+###Comparison between Parallel and Sequentially fit models  
+
+Both methods have a similar RMSE. The parallel aproach cuts off over 50% faster than the sequentially fit method.
+
+```{r echo=TRUE}
+
+P_RESULTS <- c(P_BAG_RMSE, Mean_P_TIME)
+
+S_RESULTS <- c(S_BAG_RMSE, Mean_S_TIME)
+
+RESULTS_Frame <- rbind(P_RESULTS,S_RESULTS)
+
+results_table <- kable(RESULTS_Frame,row.names = TRUE,col.names = c("RMSE","Mean Run Time"))
+
+results_table
+
+```
 
 
 
